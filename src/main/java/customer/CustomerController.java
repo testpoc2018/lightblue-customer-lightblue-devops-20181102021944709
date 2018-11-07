@@ -217,7 +217,7 @@ public class CustomerController {
     @RequestMapping(value = "/customer/{id}", method = RequestMethod.GET)
 
     ResponseEntity<?> getById(@RequestHeader Map<String, String> headers, @PathVariable String id) {
-
+		logger.info("Inside the GET method to retrieve the document");
         try {
 
             final Customer cust = cloudant.find(Customer.class, id);
