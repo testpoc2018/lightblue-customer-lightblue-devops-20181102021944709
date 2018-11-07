@@ -109,7 +109,7 @@ public class CustomerController {
                     .password(cloudantProperties.getPassword())
 
                     .build();
-
+			logger.info("User Name : " + cloudantProperties.getUsername());
             cloudant = cloudantClient.database(cloudantProperties.getDatabase(), true);
 
         } catch (MalformedURLException e) {
