@@ -1,303 +1,229 @@
 package customer;
 
-
-
 import java.net.MalformedURLException;
-
 import java.net.URI;
-
 import java.net.URL;
-
-import java.util.HashMap;
-
 import java.util.List;
-
 import java.util.Map;
-
-
 
 import javax.annotation.PostConstruct;
 
-
-
 import org.slf4j.Logger;
-
 import org.slf4j.LoggerFactory;
-
 import org.springframework.beans.factory.annotation.Autowired;
-
 import org.springframework.http.HttpStatus;
-
 import org.springframework.http.ResponseEntity;
-
 import org.springframework.web.bind.annotation.PathVariable;
-
 import org.springframework.web.bind.annotation.RequestBody;
-
 import org.springframework.web.bind.annotation.RequestHeader;
-
 import org.springframework.web.bind.annotation.RequestMapping;
-
 import org.springframework.web.bind.annotation.RequestMethod;
-
 import org.springframework.web.bind.annotation.RequestParam;
-
 import org.springframework.web.bind.annotation.ResponseBody;
-
 import org.springframework.web.bind.annotation.RestController;
-
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-
-
 import com.cloudant.client.api.ClientBuilder;
-
 import com.cloudant.client.api.CloudantClient;
-
 import com.cloudant.client.api.Database;
-
 import com.cloudant.client.api.model.Response;
-
 import com.cloudant.client.org.lightcouch.NoDocumentException;
 
-
-
 /**
-
+ * 
  * REST Controller to manage Customer database
-
  *
-
+ * 
+ * 
  */
 
 @RestController
-
 public class CustomerController {
 
-    
+	private static Logger logger = LoggerFactory.getLogger(CustomerController.class);
 
-    private static Logger logger =  LoggerFactory.getLogger(CustomerController.class);
+	private Database cloudant;
 
-    private Database cloudant;
+	@Autowired
+	private CloudantPropertiesBean cloudantProperties;
 
-    
+	@PostConstruct
+	private void init() throws MalformedURLException {
 
-    @Autowired
+		logger.debug(cloudantProperties.toString());
 
-    private CloudantPropertiesBean cloudantProperties;
+		try {
 
-    
+			String cldUrl = cloudantProperties.getProtocol() + "://" + cloudantProperties.getHost() + ":"
+					+ cloudantProperties.getPort();
 
-    @PostConstruct
+			logger.info("Connecting to cloudant at: " + cldUrl);
 
-    private void init() throws MalformedURLException {
+			final CloudantClient cloudantClient = ClientBuilder.url(new URL(cldUrl))
 
-        logger.debug(cloudantProperties.toString());
+					.username(cloudantProperties.getUsername())
 
-        
+					.password(cloudantProperties.getPassword())
 
-        try {
-
-            String cldUrl = cloudantProperties.getProtocol() + "://" + cloudantProperties.getHost() + ":" + cloudantProperties.getPort();
-
-            logger.info("Connecting to cloudant at: " + cldUrl);
-
-            final CloudantClient cloudantClient = ClientBuilder.url(new URL(cldUrl))
-
-                    .username(cloudantProperties.getUsername())
-
-                    .password(cloudantProperties.getPassword())
-
-                    .build();
+					.build();
 			logger.info("User Name : " + cloudantProperties.getUsername());
-            cloudant = cloudantClient.database(cloudantProperties.getDatabase(), true);
+			cloudant = cloudantClient.database(cloudantProperties.getDatabase(), true);
 
-        } catch (MalformedURLException e) {
+		} catch (MalformedURLException e) {
 
-            logger.error(e.getMessage(), e);
+			logger.error(e.getMessage(), e);
 
-            throw e;
+			throw e;
 
-        }
+		}
 
-    }
+	}
 
-    
+	/**
+	 * 
+	 * @return customer by username
+	 * 
+	 */
 
-    /**
+	@RequestMapping(value = "/customer/search", method = RequestMethod.GET)
+	@ResponseBody
+	ResponseEntity<?> searchCustomers(@RequestHeader Map<String, String> headers,
+			@RequestParam(required = true) String username) {
 
-     * @return customer by username
+		try {
 
-     */
+			if (username == null) {
 
-    @RequestMapping(value = "/customer/search", method = RequestMethod.GET)
+				return ResponseEntity.badRequest().body("Missing username");
 
-    @ResponseBody ResponseEntity<?> searchCustomers(@RequestHeader Map<String, String> headers, @RequestParam(required=true) String username) {
+			}
 
-        try {
+			final List<Customer> customers = cloudant.findByIndex(
 
-        	
+					"{ \"selector\": { \"username\": \"" + username + "\" } }",
 
-        	if (username == null) {
+					Customer.class);
 
-        		return ResponseEntity.badRequest().body("Missing username");
+			// query index
 
-        	}
+			return ResponseEntity.ok(customers);
 
-        	
+		} catch (Exception e) {
 
-        	final List<Customer> customers = cloudant.findByIndex(
+			logger.error(e.getMessage(), e);
 
-        			"{ \"selector\": { \"username\": \"" + username + "\" } }", 
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 
-        			Customer.class);
+		}
 
-        	
+	}
 
-        	//  query index
+	/**
+	 * 
+	 * @return all customer
+	 * 
+	 */
 
-            return  ResponseEntity.ok(customers);
+	@RequestMapping(value = "/customer", method = RequestMethod.GET)
+	@ResponseBody
+	ResponseEntity<?> getCustomers(@RequestHeader Map<String, String> hdrs) {
 
-            
+		try {
 
-        } catch (Exception e) {
+			List<Customer> allCusts = cloudant.getAllDocsRequestBuilder().includeDocs(true).build().getResponse()
+					.getDocsAs(Customer.class);
 
-            logger.error(e.getMessage(), e);
+			return ResponseEntity.ok(allCusts);
 
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		} catch (Exception e) {
 
-        }
+			logger.error(e.getMessage(), e);
 
-        
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 
-    }
+		}
 
+	}
 
+	/**
+	 * 
+	 * @return customer by id
+	 * 
+	 */
 
-    
-
-
-
-    /**
-
-     * @return all customer
-
-     */
-
-    @RequestMapping(value = "/customer", method = RequestMethod.GET)
-
-    @ResponseBody ResponseEntity<?> getCustomers(@RequestHeader Map<String, String> hdrs) {
-
-        try {
-
-            List<Customer> allCusts = cloudant.getAllDocsRequestBuilder().includeDocs(true).build().getResponse().getDocsAs(Customer.class);
-
-            return ResponseEntity.ok(allCusts);
-
-        } catch (Exception e) {
-
-            logger.error(e.getMessage(), e);
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-
-        }
-
-        
-
-    }
-
-
-
-    /**
-
-     * @return customer by id
-
-     */
-
-    @RequestMapping(value = "/customer/{id}", method = RequestMethod.GET)
-
-    ResponseEntity<?> getById(@RequestHeader Map<String, String> headers, @PathVariable String id) {
+	@RequestMapping(value = "/customer/{id}", method = RequestMethod.GET)
+	ResponseEntity<?> getById(@RequestHeader Map<String, String> headers, @PathVariable String id) {
 		logger.info("Inside the GET method to retrieve the document");
-        try {
+		try {
 
-            final Customer cust = cloudant.find(Customer.class, id);
+			final Customer cust = cloudant.find(Customer.class, id);
 
-            return ResponseEntity.ok(cust);
+			return ResponseEntity.ok(cust);
 
-        } catch (NoDocumentException e) {
+		} catch (NoDocumentException e) {
 
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Customer with ID " + id + " not found");
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Customer with ID " + id + " not found");
 
-        }
+		}
 
-    }
+	}
 
+	/**
+	 * 
+	 * Add customer
+	 * 
+	 * @return transaction status
+	 * 
+	 */
 
+	@RequestMapping(value = "/customer", method = RequestMethod.POST, consumes = "application/json")
+	ResponseEntity<?> create(@RequestHeader Map<String, String> headers, @RequestBody Customer payload) {
 
-    /**
+		try {
 
-     * Add customer 
+			if (payload.getCustomerId() != null && cloudant.contains(payload.getCustomerId())) {
 
-     * @return transaction status
+				return ResponseEntity.badRequest().body("Id " + payload.getCustomerId() + " already exists");
 
-     */
+			}
 
-    @RequestMapping(value = "/customer", method = RequestMethod.POST, consumes = "application/json")
+			final List<Customer> customers = cloudant.findByIndex(
 
-    ResponseEntity<?> create(@RequestHeader Map<String, String> headers, @RequestBody Customer payload) {
+					"{ \"selector\": { \"username\": \"" + payload.getUsername() + "\" } }",
 
-        try {
+					Customer.class);
 
-            if (payload.getCustomerId() != null && cloudant.contains(payload.getCustomerId())) {
+			if (!customers.isEmpty()) {
 
-                return ResponseEntity.badRequest().body("Id " + payload.getCustomerId() + " already exists");
+				return ResponseEntity.badRequest()
+						.body("Customer with name " + payload.getUsername() + " already exists");
 
-            }
+			}
 
-            final List<Customer> customers = cloudant.findByIndex(
+			final Response resp = cloudant.save(payload);
 
-				"{ \"selector\": { \"username\": \"" + payload.getUsername() + "\" } }", 
+			if (resp.getError() == null) {
 
-				Customer.class);
+				final URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
+						.buildAndExpand(resp.getId()).toUri();
 
-            if (!customers.isEmpty()) {
+				return ResponseEntity.created(location).build();
 
-                return ResponseEntity.badRequest().body("Customer with name " + payload.getUsername() + " already exists");
+			} else {
 
-            }
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(resp.getError());
 
-			
+			}
 
-            final Response resp = cloudant.save(payload);
+		} catch (Exception ex) {
 
-            
+			logger.error("Error creating customer: " + ex);
 
-            if (resp.getError() == null) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body("Error creating customer: " + ex.toString());
 
-		final URI location =  ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(resp.getId()).toUri();
+		}
 
-		return ResponseEntity.created(location).build();
-
-            } else {
-
-            	return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(resp.getError());
-
-            }
-
-
-
-        } catch (Exception ex) {
-
-            logger.error("Error creating customer: " + ex);
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating customer: " + ex.toString());
-
-        }
-
-        
-
-    }
-
-
+	}
 
 }
