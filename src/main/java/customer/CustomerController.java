@@ -78,6 +78,14 @@ public class CustomerController {
 		}
 
 	}
+	
+	
+	@RequestMapping(method = RequestMethod.GET, value = "/test", produces = MediaType.TEXT_HTML)
+	public ResponseEntity<?> getTestValue(){
+		logger.info("Inside the Test Value");		
+		return ResponseEntity.ok("Test");
+	}
+	
 
 	/**
 	 * 
